@@ -1,0 +1,27 @@
+NOME: João Batista Vieira Sousa 
+CARGO ATUAL: Técnico de Suporte Pleno na Ibrowse [cite: 31]
+LOCALIZAÇÃO: Florianópolis, SC [cite: 5]
+
+RESUMO PROFISSIONAL:
+Profissional com sólida experiência em suporte técnico e funcional, focado no diagnóstico de incidentes, análise de problemas e gestão de chamados[cite: 7]. Especialista em consultas SQL para banco de dados e monitoramento de integrações via APIs e jobs. Forte capacidade analítica para escalonamento de demandas e conformidade com LGPD e SLAs[cite: 9, 34].
+
+FORMAÇÃO:
+- Graduação em Física pela UFSC (Concluído em 2024)[cite: 11, 14].
+- Graduação em Análise e Desenvolvimento de Sistemas (Previsão 2027)[cite: 15, 16].
+
+HABILIDADES TÉCNICAS:
+- Suporte Técnico e Funcional (Nível 1, 2 e Pleno)[cite: 24, 31, 43].
+- Banco de Dados: Consultas SQL[cite: 26, 33].
+- Programação: Python (Básico ao Avançado) e Flask[cite: 21, 26].
+- Integrações: Monitoramento de APIs e Jobs[cite: 26, 33].
+- Web: Bootstrap 5[cite: 22].
+- Soft Skills: Raciocínio lógico, resolução de problemas e comunicação técnica[cite: 27, 28].
+
+EXPERIÊNCIA PROFISSIONAL:
+1. Ibrowse - Consultoria & Informática (2025 - Atual): Técnico de Suporte Pleno. Atuação com diagnóstico de incidentes, SQL, monitoramento de integrações e gestão de SLAs[cite: 30, 31, 33, 34].
+2. SED SC (2023 - 2024): Professor de Física. Desenvolvimento de materiais e suporte acadêmico[cite: 36, 37, 39].
+3. Ibrowse (2019 - 2023): Suporte Técnico. Atendimento remoto, acompanhamento de chamados N1 e N2 e suporte a hardware[cite: 41, 42, 43, 44].
+
+IDIOMAS:
+- Português: Nativo[cite: 18].
+- Inglês: Intermediário[cite: 19].

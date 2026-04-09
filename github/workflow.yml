@@ -1,0 +1,38 @@
+name: Bot de Vagas Diario
+
+on:
+  schedule:
+    # Horários em UTC (11:00 e 21:00 UTC = 08:00 e 18:00 BRT)
+    - cron: '0 11,21 * * *'
+  workflow_dispatch: # Permite rodar manualmente pelo botão no GitHub
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do codigo
+        uses: actions/checkout@v3
+
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Instalar dependencias
+        run: |
+          pip install google-genai python-jobspy pandas python-dotenv
+
+      - name: Executar Bot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          EMAIL_USER: ${{ secrets.EMAIL_USER }}
+          EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
+        run: python main.py
+
+      - name: Salvar progresso (vagas ja vistas)
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add vagas_enviadas.txt
+          git commit -m "Atualizando vagas enviadas [skip ci]" || exit 0
+          git push

@@ -1,11 +1,8 @@
 import os
 import sys
 
-# Força o erro a aparecer no log do GitHub se o script travar
-def exception_handler(exception_type, exception, traceback):
-    print(f"❌ ERRO CRÍTICO: {exception}")
-
-sys.excepthook = exception_handler
+# Garante que qualquer erro apareça no log do GitHub
+print("--- INICIANDO SCRIPT ---")
 
 try:
     import smtplib
@@ -13,62 +10,48 @@ try:
     from email.mime.text import MIMEText
     from email.mime.multipart import MIMEMultipart
     from jobspy import scrape_jobs
-    print("✅ Bibliotecas importadas com sucesso.")
+    print("✅ Bibliotecas carregadas.")
 except Exception as e:
-    print(f"❌ Erro ao importar bibliotecas: {e}")
+    print(f"❌ Erro nas bibliotecas: {e}")
     sys.exit(1)
 
-# CONFIGURAÇÕES
-ARQUIVO_CURRICULO = "curriculo.txt"
+# TESTE DE AMBIENTE
+user = os.getenv("EMAIL_USER")
+print(f"✅ Usuário configurado: {user}")
 
-def enviar_email_teste(vagas):
-    user = os.getenv("EMAIL_USER")
-    password = os.getenv("EMAIL_PASS")
-    
-    if not user or not password:
-        print("❌ Secrets de e-mail não encontrados.")
-        return
+# BUSCA DE VAGAS
+print("🔍 Buscando vagas...")
+try:
+    jobs = scrape_jobs(
+        site_name=["indeed"],
+        search_term="TI",
+        location="Florianopolis, SC",
+        results_wanted=2,
+        country_hint="brazil"
+    )
+    print(f"✅ Vagas encontradas: {len(jobs)}")
+except Exception as e:
+    print(f"❌ Erro no scraper: {e}")
+    jobs = pd.DataFrame()
 
+# TESTE DE ENVIO
+if not jobs.empty:
+    print("📧 Tentando enviar e-mail de teste...")
     msg = MIMEMultipart()
-    msg['Subject'] = "🚀 Teste Final do Bot"
+    msg['Subject'] = "Teste do Bot - João Batista"
     msg['From'] = user
     msg['To'] = user
-    msg.attach(MIMEText(f"O bot encontrou {len(vagas)} vagas.", 'plain'))
-
+    msg.attach(MIMEText("O bot rodou com sucesso no GitHub!", 'plain'))
+    
     try:
+        password = os.getenv("EMAIL_PASS")
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(user, password)
             server.send_message(msg)
         print("✅ E-mail enviado!")
     except Exception as e:
         print(f"❌ Falha no e-mail: {e}")
-
-print("--- INICIANDO PROCESSO ---")
-
-# 1. Tentar ler currículo
-if os.path.exists(ARQUIVO_CURRICULO):
-    print(f"✅ Arquivo {ARQUIVO_CURRICULO} encontrado.")
 else:
-    print(f"⚠️ Arquivo {ARQUIVO_CURRICULO} não encontrado na raiz.")
+    print("⚠️ Nenhuma vaga encontrada para testar o e-mail.")
 
-# 2. Buscar vagas (simplificado para teste)
-print("🔍 Buscando vagas no Indeed...")
-try:
-    jobs = scrape_jobs(
-        site_name=["indeed"],
-        search_term="Suporte",
-        location="Florianopolis, SC",
-        results_wanted=2,
-        country_hint="brazil"
-    )
-    print(f"✅ Busca concluída. Vagas: {len(jobs)}")
-    
-    if not jobs.empty:
-        enviar_email_teste(jobs.to_dict('records'))
-    else:
-        print("ℹ️ Nenhuma vaga encontrada no momento.")
-
-except Exception as e:
-    print(f"❌ Erro no Scraper: {e}")
-
-print("--- FIM DO PROCESSO ---")
+print("--- FIM DO SCRIPT ---")

@@ -48,7 +48,7 @@ def enviar_email(vagas):
         server.send_message(msg)
 
 # 2. EXECUÇÃO
-print("--- INICIANDO BUSCA MULTIDISCIPLINAR (FLORIPA + REMOTO) ---")
+print("--- INICIANDO BUSCA DE RESILIÊNCIA ---")
 historico = carregar_historico()
 vagas_para_enviar = []
 
@@ -56,62 +56,65 @@ try:
     with open(ARQUIVO_CURRICULO, "r", encoding="utf-8") as f:
         perfil = f.read()
 except:
-    perfil = "Técnico de TI, cursando ADS, com foco em Python, Dados e QA."
+    perfil = "Técnico de TI em Florianópolis, cursando ADS, focado em Python, QA e Dados."
 
-# Lista de cargos para pesquisa (buscas otimizadas)
-termos_pesquisa = [
-    "Implementation Engineer", "Analista de Integracoes", "QA Quality Assurance",
-    "Analista de Dados", "BI Business Intelligence", "Python Junior", 
-    "Suporte Tecnico", "Suporte de Aplicacoes"
+# Agrupamos os termos para fazer menos requisições e evitar bloqueios
+termos_agrupados = [
+    "Implementation Engineer OR Analista de Integracoes",
+    "QA OR Quality Assurance OR Analista de Qualidade",
+    "Analista de Dados OR BI OR Business Intelligence",
+    "Desenvolvedor Python Junior OR Backend Python",
+    "Suporte Tecnico OR Analista de Suporte"
 ]
 
-# Configurações de Localização para teste amplo
 locais = ["Florianopolis", "Remoto"]
 
 for local in locais:
     print(f"📍 Pesquisando em: {local}")
-    for termo in termos_pesquisa:
-        print(f"  🔍 Cargo: {termo}...")
+    for termo in termos_agrupados:
+        print(f"  🔍 Buscando grupo: {termo}...")
         try:
-            # APENAS LinkedIn e Indeed (os outros bloqueiam o bot)
+            # Testamos um site por vez para isolar o erro
             jobs = scrape_jobs(
-                site_name=["linkedin", "indeed"],
+                site_name=["indeed"], # Indeed é mais estável que o LinkedIn no GitHub
                 search_term=termo,
                 location=local,
-                results_wanted=10,
+                results_wanted=15,
                 country_hint="brazil",
-                hours_old=168 # 7 dias
+                hours_old=168
             )
             
-            if jobs.empty: continue
+            if jobs.empty: 
+                print("    - Nenhuma vaga encontrada neste grupo.")
+                continue
 
+            print(f"    - Encontradas {len(jobs)} vagas. Analisando...")
             for _, row in jobs.iterrows():
                 link = row['job_url']
                 if link in historico: continue
                 
-                # IA analisa a vaga (Versão Corrigida)
-                prompt = f"""
-                Avalie a vaga para este candidato: {perfil}. 
-                Vaga: {row['title']} - {row['description'][:800]}. 
-                Responda APENAS um JSON no formato: 
-                {{"nota": 0, "motivo": "frase"}}
-                """
+                prompt = f"Analise a vaga para o candidato: {perfil}. Vaga: {row['title']} - {row['description'][:800]}. Responda apenas um JSON: {{\"nota\": 0, \"motivo\": \"texto\"}}"
+                
                 try:
                     response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-                    res_json = json.loads(response.text.strip().replace("```json", "").replace("```", ""))
+                    clean_res = response.text.strip().replace("```json", "").replace("```", "")
+                    res_json = json.loads(clean_res)
                     
-                    if res_json.get("nota", 0) >= 6:
+                    if res_json.get("nota", 0) >= 7:
                         vagas_para_enviar.append({
                             'titulo': row['title'], 'empresa': row['company'],
                             'nota': res_json['nota'], 'motivo': res_json['motivo'], 'link': link
                         })
                         salvar_no_historico(link)
-                        print(f"    ✅ Vaga aprovada: {row['title']}")
-                    time.sleep(1) # Respeitar API Gemini
+                        print(f"      ✅ Aprovada: {row['title']}")
+                    time.sleep(2) # Pausa maior para não ser bloqueado
                 except: continue
+            
+            time.sleep(5) # Pausa entre grupos de busca
+            
         except Exception as e:
-            print(f"    ⚠️ Erro no scraper para {termo}: {e}")
+            print(f"    ⚠️ Falha no grupo {termo}: {e}")
             continue
 
 enviar_email(vagas_para_enviar)
-print(f"--- PROCESSO FINALIZADO: {len(vagas_para_enviar)} vagas novas enviadas ---")
+print(f"--- PROCESSO FINALIZADO: {len(vagas_para_enviar)} vagas enviadas ---")

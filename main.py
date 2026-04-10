@@ -48,7 +48,7 @@ def enviar_email(vagas):
         server.send_message(msg)
 
 # 2. EXECUÇÃO
-print("--- INICIANDO BUSCA MULTIDISCIPLINAR ---")
+print("--- INICIANDO BUSCA MULTIDISCIPLINAR (FLORIPA + REMOTO) ---")
 historico = carregar_historico()
 vagas_para_enviar = []
 
@@ -56,52 +56,57 @@ try:
     with open(ARQUIVO_CURRICULO, "r", encoding="utf-8") as f:
         perfil = f.read()
 except:
-    perfil = "Profissional de TI com experiência em Suporte, cursando ADS, com foco em Python, Dados e QA."
+    perfil = "Técnico de TI, cursando ADS, com foco em Python, Dados e QA."
 
 # Lista de cargos para pesquisa (buscas otimizadas)
 termos_pesquisa = [
-    "Implementation Engineer", "Analista de Integrações", "QA", "Quality Assurance",
-    "Analista de Dados", "Business Intelligence", "Python Junior", "Suporte Tecnico",
-    "Suporte de Aplicacoes"
+    "Implementation Engineer", "Analista de Integracoes", "QA Quality Assurance",
+    "Analista de Dados", "BI Business Intelligence", "Python Junior", 
+    "Suporte Tecnico", "Suporte de Aplicacoes"
 ]
 
-# Realiza a busca em blocos para não sobrecarregar
-for termo in termos_pesquisa:
-    print(f"🔍 Buscando por: {termo}...")
-    try:
-        jobs = scrape_jobs(
-            site_name=["indeed", "linkedin"],
-            search_term=termo,
-            location="Florianopolis",
-            distance=50,
-            results_wanted=10,
-            country_hint="brazil",
-            hours_old=72 # 3 dias para manter o radar sempre fresco
-        )
-        
-        if jobs.empty: continue
+# Configurações de Localização para teste amplo
+locais = ["Florianopolis", "Remoto"]
 
-        for _, row in jobs.iterrows():
-            link = row['job_url']
-            if link in historico: continue
+for local in locais:
+    print(f"📍 Pesquisando em: {local}")
+    for termo in termos_pesquisa:
+        print(f"  🔍 Cargo: {termo}...")
+        try:
+            # APENAS LinkedIn e Indeed (os outros bloqueiam o bot)
+            jobs = scrape_jobs(
+                site_name=["linkedin", "indeed"],
+                search_term=termo,
+                location=local,
+                results_wanted=10,
+                country_hint="brazil",
+                hours_old=168 # 7 dias
+            )
             
-            prompt = f"Avalie a vaga para este candidato: {perfil}. Vaga: {row['title']} - {row['description'][:800]}. Responda APENAS um JSON: {{"nota": 0 a 10, "motivo": "frase"}}"
-            try:
-                response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-                res_json = json.loads(response.text.strip().replace("```json", "").replace("```", ""))
+            if jobs.empty: continue
+
+            for _, row in jobs.iterrows():
+                link = row['job_url']
+                if link in historico: continue
                 
-                if res_json.get("nota", 0) >= 6:
-                    vagas_para_enviar.append({
-                        'titulo': row['title'], 'empresa': row['company'],
-                        'nota': res_json['nota'], 'motivo': res_json['motivo'], 'link': link
-                    })
-                    salvar_no_historico(link)
-                    print(f"✅ Vaga aprovada: {row['title']} ({termo})")
-                time.sleep(1.5)
-            except: continue
-    except Exception as e:
-        print(f"⚠️ Erro ao buscar {termo}: {e}")
-        continue
+                # IA analisa a vaga
+                prompt = f"Avalie a vaga para este candidato: {perfil}. Vaga: {row['title']} - {row['description'][:800]}. Responda APENAS um JSON: {{"nota": 0 a 10, "motivo": "frase"}}"
+                try:
+                    response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
+                    res_json = json.loads(response.text.strip().replace("```json", "").replace("```", ""))
+                    
+                    if res_json.get("nota", 0) >= 6:
+                        vagas_para_enviar.append({
+                            'titulo': row['title'], 'empresa': row['company'],
+                            'nota': res_json['nota'], 'motivo': res_json['motivo'], 'link': link
+                        })
+                        salvar_no_historico(link)
+                        print(f"    ✅ Vaga aprovada: {row['title']}")
+                    time.sleep(1) # Respeitar API Gemini
+                except: continue
+        except Exception as e:
+            print(f"    ⚠️ Erro no scraper para {termo}: {e}")
+            continue
 
 enviar_email(vagas_para_enviar)
-print(f"--- FIM DO PROCESSO: {len(vagas_para_enviar)} vagas enviadas ---")
+print(f"--- PROCESSO FINALIZADO: {len(vagas_para_enviar)} vagas novas enviadas ---")

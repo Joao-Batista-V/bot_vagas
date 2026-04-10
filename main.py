@@ -66,62 +66,25 @@ try:
 except:
     perfil = "Técnico de Suporte em TI e desenvolvedor iniciante."
 
-# Lista de sites para varrer
-sites_alvo = ["indeed", "linkedin", "glassdoor", "zip_recruiter"]
+# ... (mantenha o início igual)
+
+# Lista de sites que funcionam melhor no Brasil
+sites_alvo = ["indeed", "linkedin"] 
 print(f"🔍 Vasculhando: {', '.join(sites_alvo)}...")
 
 try:
     jobs = scrape_jobs(
         site_name=sites_alvo,
-        search_term="Suporte TI, Help Desk, Analista de Suporte, Python Junior",
+        search_term="Suporte TI, Help Desk, Tecnico Informatica, Analista Suporte",
         location="Florianopolis, SC",
-        results_wanted=30, # Aumentamos para pegar mais opções de todos os sites
+        results_wanted=40, # Aumentamos o volume
         country_hint="brazil",
-        hours_old=48 # Vagas bem recentes
+        hours_old=168, # Janela de 7 dias para garantir resultados
+        enforce_comma_separation=True
     )
     print(f"📊 Total bruto de vagas encontradas: {len(jobs)}")
 except Exception as e:
-    print(f"⚠️ Aviso: Ocorreu um problema em um dos sites, mas continuaremos com o que foi coletado. Erro: {e}")
+    print(f"⚠️ Erro no Scraper: {e}")
     jobs = pd.DataFrame()
 
-if not jobs.empty:
-    for _, row in jobs.iterrows():
-        link = row['job_url']
-        
-        # 1. Ignorar se já enviamos antes
-        if link in historico:
-            continue
-        
-        # 2. IA analisa a compatibilidade
-        prompt = f"""
-        Avalie a compatibilidade (0 a 10) entre o perfil e a vaga abaixo.
-        PERFIL: {perfil}
-        VAGA: {row['title']} na empresa {row['company']} - {row['description'][:1000]}
-        
-        Responda APENAS um JSON:
-        {{"nota": int, "motivo": "uma frase curta explicando a nota"}}
-        """
-        
-        try:
-            response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-            res_text = response.text.strip().replace("```json", "").replace("```", "")
-            res_json = json.loads(res_text)
-            
-            # Filtro: Só envia se a nota for alta (ajustado para 7)
-            if res_json.get("nota", 0) >= 7:
-                vagas_para_enviar.append({
-                    'titulo': row['title'],
-                    'empresa': row['company'],
-                    'nota': res_json['nota'],
-                    'motivo': res_json['motivo'],
-                    'link': link
-                })
-                salvar_no_historico(link)
-                print(f"🌟 Vaga Qualificada: {row['title']}")
-            
-            time.sleep(1.5) # Pausa para respeitar limites da API
-        except:
-            continue
-
-enviar_email(vagas_para_enviar)
-print("--- FIM DO PROCESSO ---")
+# ... (mantenha o resto do loop da IA igual)

@@ -1,52 +1,34 @@
 import os
-import json
 import time
 import smtplib
 import pandas as pd
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from google import genai
 from jobspy import scrape_jobs
 
-# 1. CONFIGURAÇÕES INICIAIS
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+# CONFIGURAÇÕES
 ARQUIVO_HISTORICO = "vagas_enviadas.txt"
-ARQUIVO_CURRICULO = "curriculo.txt" # Ajustado para o nome com acento conforme seu VS Code
-
-def carregar_historico():
-    if not os.path.exists(ARQUIVO_HISTORICO):
-        return set()
-    with open(ARQUIVO_HISTORICO, "r") as f:
-        return set(line.strip() for line in f)
-
-def salvar_no_historico(link):
-    with open(ARQUIVO_HISTORICO, "a") as f:
-        f.write(link + "\n")
+ARQUIVO_CURRICULO = "curriculo.txt"
 
 def enviar_email(vagas):
-    if not vagas: 
-        print("ℹ️ Nenhuma vaga nova qualificada para envio.")
-        return
-    
     user = os.getenv("EMAIL_USER")
     password = os.getenv("EMAIL_PASS")
     
+    if not user or not password:
+        print("❌ Erro: EMAIL_USER ou EMAIL_PASS não configurados nos Secrets.")
+        return
+
     msg = MIMEMultipart()
-    msg['Subject'] = f"🚀 {len(vagas)} Novas Vagas para João Batista"
+    msg['Subject'] = f"🚀 Teste de Conexão: {len(vagas)} Vagas"
     msg['From'] = user
     msg['To'] = user
-
-    html = "<h2>Vagas selecionadas pelo seu Bot IA</h2>"
+    
+    corpo = "<ul>"
     for v in vagas:
-        html += f"""
-        <div style='border-bottom: 1px solid #ccc; padding: 10px;'>
-            <h3>{v['titulo']}</h3>
-            <p><b>Nota:</b> {v['nota']}/10 | <b>Empresa:</b> {v['empresa']}</p>
-            <p><i>{v['motivo']}</i></p>
-            <a href='{v['link']}'>Ver Vaga</a>
-        </div>
-        """
-    msg.attach(MIMEText(html, 'html'))
+        corpo += f"<li>{v['titulo']} - {v['empresa']}</li>"
+    corpo += "</ul>"
+    
+    msg.attach(MIMEText(corpo, 'html'))
 
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
@@ -54,80 +36,49 @@ def enviar_email(vagas):
             server.send_message(msg)
         print("✅ E-mail enviado com sucesso!")
     except Exception as e:
-        print(f"❌ Erro ao enviar e-mail: {e}")
+        print(f"❌ Erro no envio de e-mail: {e}")
 
-# 3. EXECUÇÃO PRINCIPAL
-print("🚀 Iniciando busca de vagas...")
-historico = carregar_historico()
-vagas_para_enviar = []
+print("--- INICIANDO DIAGNÓSTICO ---")
 
-# Carregar Currículo
+# Passo 1: Testar leitura do currículo
 try:
     with open(ARQUIVO_CURRICULO, "r", encoding="utf-8") as f:
-        perfil_candidato = f.read()
-except FileNotFoundError:
-    print(f"❌ Erro: Arquivo {ARQUIVO_CURRICULO} não encontrado.")
-    perfil_candidato = "Perfil técnico em TI e Física." # Fallback simples
+        conteudo = f.read()
+    print(f"✅ Arquivo de currículo lido ({len(conteudo)} caracteres).")
+except Exception as e:
+    print(f"❌ Erro ao ler currículo: {e}")
 
-# Realizar Busca
+# Passo 2: Testar o Scraper (Apenas 1 site para evitar bloqueio)
+print("🔍 Tentando buscar vagas no Indeed...")
 try:
     jobs = scrape_jobs(
-        site_name=["indeed", "linkedin"],
-        search_term="Suporte TI, Analista de Suporte, Help Desk, Python Junior",
+        site_name=["indeed"],
+        search_term="Suporte TI",
         location="Florianopolis, SC",
-        results_wanted=20,
-        country_hint="brazil",
-        hours_old=168 # Busca vagas da última semana
+        results_wanted=3,
+        country_hint="brazil"
     )
+    print(f"✅ Scraper finalizado. Vagas encontradas: {len(jobs)}")
 except Exception as e:
-    print(f"⚠️ Erro no Scraper: {e}")
+    print(f"❌ Erro no Scraper: {e}")
     jobs = pd.DataFrame()
 
+# Passo 3: Tentar enviar e-mail se houver algo
 if not jobs.empty:
-    print(f"📊 {len(jobs)} vagas encontradas. Analisando compatibilidade...")
-    
+    lista_teste = []
     for _, row in jobs.iterrows():
-        link = row['job_url']
-        
-        # Pula se já foi enviada antes
-        if link in historico:
-            continue
-            
-        # IA analisa a vaga
-        prompt = f"""
-        Aja como um recrutador. Avalie a vaga abaixo para este candidato:
-        CANDIDATO: {perfil_candidato}
-        VAGA: {row['title']} - {row['description']}
-        
-        Responda APENAS um JSON:
-        {{"nota": 0 a 10, "motivo": "uma frase curta"}}
-        """
-        
-        try:
-            response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-            # Limpeza simples do texto da resposta
-            res_text = response.text.strip().replace("```json", "").replace("```", "")
-            res_json = json.loads(res_text)
-            
-            nota = res_json.get("nota", 0)
-            
-            # FILTRO: Nota mínima 6 para enviar por e-mail
-            if nota >= 6:
-                vagas_para_enviar.append({
-                    'titulo': row['title'],
-                    'empresa': row['company'],
-                    'nota': nota,
-                    'motivo': res_json.get("motivo", ""),
-                    'link': link
-                })
-                salvar_no_historico(link)
-                print(f"✅ Vaga aprovada (Nota {nota}): {row['title']}")
-            
-            time.sleep(2) # Evitar limite de cota da API
-            
-        except Exception as e:
-            print(f"⚠️ Erro ao analisar vaga {row['title']}: {e}")
-            continue
+        lista_teste.append({'titulo': row['title'], 'empresa': row['company']})
+    
+    enviar_email(lista_teste)
+    
+    # Passo 4: Testar escrita no histórico
+    try:
+        with open(ARQUIVO_HISTORICO, "a") as f:
+            f.write("teste_conexao\n")
+        print("✅ Escrita no histórico funcionando.")
+    except Exception as e:
+        print(f"❌ Erro ao escrever no histórico: {e}")
+else:
+    print("⚠️ Nenhuma vaga encontrada para enviar e-mail.")
 
-# Finalização
-enviar_email(vagas_para_enviar)
+print("--- FIM DO DIAGNÓSTICO ---")

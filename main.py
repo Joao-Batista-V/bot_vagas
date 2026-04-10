@@ -23,11 +23,11 @@ print(f"✅ Usuário configurado: {user}")
 print("🔍 Buscando vagas...")
 try:
     jobs = scrape_jobs(
-        site_name=["indeed"],
-        search_term="TI",
-        location="Florianopolis, SC",
+        site_name=["linkedin", "indeed", "glassdoor", "vagas.com.br"],
+        search_term=["TI", "tecnologia", "desenvolvedor", "programador"],
+        location=["Florianopolis, SC", "Santa Catarina", "Brasil", "remoto"],
         results_wanted=2,
-        country_hint="brazil"
+        country_hint=["brazil", "brasil", "br" ]
     )
     print(f"✅ Vagas encontradas: {len(jobs)}")
 except Exception as e:

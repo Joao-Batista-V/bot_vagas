@@ -24,76 +24,84 @@ def salvar_no_historico(link):
 
 def enviar_email(vagas):
     if not vagas: 
-        print("ℹ️ Nenhuma vaga nova qualificada hoje.")
+        print("ℹ️ Nenhuma vaga nova qualificada hoje para os novos termos.")
         return
     user = os.getenv("EMAIL_USER")
     password = os.getenv("EMAIL_PASS")
     msg = MIMEMultipart()
-    msg['Subject'] = f"🚀 {len(vagas)} Novas Vagas para João Batista"
+    msg['Subject'] = f"🚀 {len(vagas)} Oportunidades Selecionadas - João Batista"
     msg['From'] = user
     msg['To'] = user
-    html = "<h2>Vagas Selecionadas por IA</h2>"
+    html = "<h2>Radar de Vagas IA (TI, QA, Dados e Suporte)</h2>"
     for v in vagas:
-        html += f"<div style='border-bottom:1px solid #ccc;padding:10px;'><h3>{v['titulo']}</h3><p><b>Nota: {v['nota']}</b> | {v['empresa']}</p><p>{v['motivo']}</p><a href='{v['link']}'>Ver Vaga</a></div>"
+        html += f"""
+        <div style='border-bottom:1px solid #ccc;padding:15px;'>
+            <h3 style='color:#2c3e50;'>{v['titulo']}</h3>
+            <p><b>Empresa:</b> {v['empresa']} | <b>Nota:</b> {v['nota']}/10</p>
+            <p style='color:#555;'>{v['motivo']}</p>
+            <a href='{v['link']}' style='color:#3498db;'>Candidatar-se agora</a>
+        </div>
+        """
     msg.attach(MIMEText(html, 'html'))
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
         server.login(user, password)
         server.send_message(msg)
 
 # 2. EXECUÇÃO
-print("--- INICIANDO BUSCA OTIMIZADA ---")
+print("--- INICIANDO BUSCA MULTIDISCIPLINAR ---")
 historico = carregar_historico()
 vagas_para_enviar = []
 
 try:
     with open(ARQUIVO_CURRICULO, "r", encoding="utf-8") as f:
         perfil = f.read()
-    print("✅ Currículo carregado.")
 except:
-    perfil = "Técnico de Suporte TI, graduado em Física, cursando ADS."
+    perfil = "Profissional de TI com experiência em Suporte, cursando ADS, com foco em Python, Dados e QA."
 
-# BUSCA FOCO EM FLORIPA E REGIÃO
-try:
-    jobs = scrape_jobs(
-        site_name=["indeed", "linkedin"],
-        search_term="Suporte TI, Help Desk, Tecnico Informatica, Analista Suporte",
-        location="Florianopolis",
-        distance=50, # Pega São José, Palhoça, etc.
-        results_wanted=50,
-        country_hint="brazil",
-        hours_old=168 # Últimos 7 dias
-    )
-    print(f"✅ Vagas encontradas no total: {len(jobs)}")
-except Exception as e:
-    print(f"❌ Erro no Scraper: {e}")
-    jobs = pd.DataFrame()
+# Lista de cargos para pesquisa (buscas otimizadas)
+termos_pesquisa = [
+    "Implementation Engineer", "Analista de Integrações", "QA", "Quality Assurance",
+    "Analista de Dados", "Business Intelligence", "Python Junior", "Suporte Tecnico",
+    "Suporte de Aplicacoes"
+]
 
-if not jobs.empty:
-    for _, row in jobs.iterrows():
-        link = row['job_url']
-        if link in historico: continue
+# Realiza a busca em blocos para não sobrecarregar
+for termo in termos_pesquisa:
+    print(f"🔍 Buscando por: {termo}...")
+    try:
+        jobs = scrape_jobs(
+            site_name=["indeed", "linkedin"],
+            search_term=termo,
+            location="Florianopolis",
+            distance=50,
+            results_wanted=10,
+            country_hint="brazil",
+            hours_old=72 # 3 dias para manter o radar sempre fresco
+        )
         
-        # Filtro inicial por palavras-chave no título para poupar API
-        titulo = row['title'].lower()
-        if not any(x in titulo for x in ['suporte', 'tecnico', 'help', 'analista', 'ti', 'informatica', 'python']):
-            continue
+        if jobs.empty: continue
 
-        prompt = f"Avalie a vaga para este candidato: {perfil}. Vaga: {row['title']} - {row['description'][:800]}. Responda APENAS um JSON: {{"nota": 0 a 10, "motivo": "frase"}}"
-        try:
-            response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
-            res_text = response.text.strip().replace("```json", "").replace("```", "")
-            res_json = json.loads(res_text)
+        for _, row in jobs.iterrows():
+            link = row['job_url']
+            if link in historico: continue
             
-            # Nota 6 ou mais para garantir que chegue algo no início
-            if res_json.get("nota", 0) >= 6:
-                vagas_para_enviar.append({
-                    'titulo': row['title'], 'empresa': row['company'],
-                    'nota': res_json['nota'], 'motivo': res_json['motivo'], 'link': link
-                })
-                salvar_no_historico(link)
-                print(f"🎯 Aprovada: {row['title']} (Nota {res_json['nota']})")
-            time.sleep(2)
-        except: continue
+            prompt = f"Avalie a vaga para este candidato: {perfil}. Vaga: {row['title']} - {row['description'][:800]}. Responda APENAS um JSON: {{"nota": 0 a 10, "motivo": "frase"}}"
+            try:
+                response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
+                res_json = json.loads(response.text.strip().replace("```json", "").replace("```", ""))
+                
+                if res_json.get("nota", 0) >= 6:
+                    vagas_para_enviar.append({
+                        'titulo': row['title'], 'empresa': row['company'],
+                        'nota': res_json['nota'], 'motivo': res_json['motivo'], 'link': link
+                    })
+                    salvar_no_historico(link)
+                    print(f"✅ Vaga aprovada: {row['title']} ({termo})")
+                time.sleep(1.5)
+            except: continue
+    except Exception as e:
+        print(f"⚠️ Erro ao buscar {termo}: {e}")
+        continue
 
 enviar_email(vagas_para_enviar)
-print("--- FIM DO PROCESSO ---")
+print(f"--- FIM DO PROCESSO: {len(vagas_para_enviar)} vagas enviadas ---")

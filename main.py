@@ -1,84 +1,74 @@
 import os
-import time
-import smtplib
-import pandas as pd
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from jobspy import scrape_jobs
+import sys
+
+# Força o erro a aparecer no log do GitHub se o script travar
+def exception_handler(exception_type, exception, traceback):
+    print(f"❌ ERRO CRÍTICO: {exception}")
+
+sys.excepthook = exception_handler
+
+try:
+    import smtplib
+    import pandas as pd
+    from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
+    from jobspy import scrape_jobs
+    print("✅ Bibliotecas importadas com sucesso.")
+except Exception as e:
+    print(f"❌ Erro ao importar bibliotecas: {e}")
+    sys.exit(1)
 
 # CONFIGURAÇÕES
-ARQUIVO_HISTORICO = "vagas_enviadas.txt"
 ARQUIVO_CURRICULO = "curriculo.txt"
 
-def enviar_email(vagas):
+def enviar_email_teste(vagas):
     user = os.getenv("EMAIL_USER")
     password = os.getenv("EMAIL_PASS")
     
     if not user or not password:
-        print("❌ Erro: EMAIL_USER ou EMAIL_PASS não configurados nos Secrets.")
+        print("❌ Secrets de e-mail não encontrados.")
         return
 
     msg = MIMEMultipart()
-    msg['Subject'] = f"🚀 Teste de Conexão: {len(vagas)} Vagas"
+    msg['Subject'] = "🚀 Teste Final do Bot"
     msg['From'] = user
     msg['To'] = user
-    
-    corpo = "<ul>"
-    for v in vagas:
-        corpo += f"<li>{v['titulo']} - {v['empresa']}</li>"
-    corpo += "</ul>"
-    
-    msg.attach(MIMEText(corpo, 'html'))
+    msg.attach(MIMEText(f"O bot encontrou {len(vagas)} vagas.", 'plain'))
 
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
             server.login(user, password)
             server.send_message(msg)
-        print("✅ E-mail enviado com sucesso!")
+        print("✅ E-mail enviado!")
     except Exception as e:
-        print(f"❌ Erro no envio de e-mail: {e}")
+        print(f"❌ Falha no e-mail: {e}")
 
-print("--- INICIANDO DIAGNÓSTICO ---")
+print("--- INICIANDO PROCESSO ---")
 
-# Passo 1: Testar leitura do currículo
-try:
-    with open(ARQUIVO_CURRICULO, "r", encoding="utf-8") as f:
-        conteudo = f.read()
-    print(f"✅ Arquivo de currículo lido ({len(conteudo)} caracteres).")
-except Exception as e:
-    print(f"❌ Erro ao ler currículo: {e}")
+# 1. Tentar ler currículo
+if os.path.exists(ARQUIVO_CURRICULO):
+    print(f"✅ Arquivo {ARQUIVO_CURRICULO} encontrado.")
+else:
+    print(f"⚠️ Arquivo {ARQUIVO_CURRICULO} não encontrado na raiz.")
 
-# Passo 2: Testar o Scraper (Apenas 1 site para evitar bloqueio)
-print("🔍 Tentando buscar vagas no Indeed...")
+# 2. Buscar vagas (simplificado para teste)
+print("🔍 Buscando vagas no Indeed...")
 try:
     jobs = scrape_jobs(
         site_name=["indeed"],
-        search_term="Suporte TI",
+        search_term="Suporte",
         location="Florianopolis, SC",
-        results_wanted=3,
+        results_wanted=2,
         country_hint="brazil"
     )
-    print(f"✅ Scraper finalizado. Vagas encontradas: {len(jobs)}")
+    print(f"✅ Busca concluída. Vagas: {len(jobs)}")
+    
+    if not jobs.empty:
+        enviar_email_teste(jobs.to_dict('records'))
+    else:
+        print("ℹ️ Nenhuma vaga encontrada no momento.")
+
 except Exception as e:
     print(f"❌ Erro no Scraper: {e}")
-    jobs = pd.DataFrame()
 
-# Passo 3: Tentar enviar e-mail se houver algo
-if not jobs.empty:
-    lista_teste = []
-    for _, row in jobs.iterrows():
-        lista_teste.append({'titulo': row['title'], 'empresa': row['company']})
-    
-    enviar_email(lista_teste)
-    
-    # Passo 4: Testar escrita no histórico
-    try:
-        with open(ARQUIVO_HISTORICO, "a") as f:
-            f.write("teste_conexao\n")
-        print("✅ Escrita no histórico funcionando.")
-    except Exception as e:
-        print(f"❌ Erro ao escrever no histórico: {e}")
-else:
-    print("⚠️ Nenhuma vaga encontrada para enviar e-mail.")
-
-print("--- FIM DO DIAGNÓSTICO ---")
+print("--- FIM DO PROCESSO ---")

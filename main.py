@@ -22,80 +22,78 @@ def salvar_no_historico(link):
     with open(ARQUIVO_HISTORICO, "a") as f:
         f.write(link + "\n")
 
-# BUSCA DE VAGAS
-print("🔍 Buscando vagas...")
-try:
-    jobs = scrape_jobs(
-        site_name=["linkedin", "indeed", "glassdoor", "vagas.com.br"],
-        search_term=["TI", "tecnologia", "desenvolvedor", "programador"],
-        location=["Florianopolis, SC", "Santa Catarina", "Brasil", "remoto"],
-        results_wanted=2,
-        country_hint=["brazil", "brasil", "br" ]
-    )
-    print(f"✅ Vagas encontradas: {len(jobs)}")
-except Exception as e:
-    print(f"❌ Erro no scraper: {e}")
-    jobs = pd.DataFrame()
-
-# TESTE DE ENVIO
-if not jobs.empty:
-    print("📧 Tentando enviar e-mail de teste...")
+def enviar_email(vagas):
+    if not vagas: 
+        print("ℹ️ Nenhuma vaga nova qualificada hoje.")
+        return
+    user = os.getenv("EMAIL_USER")
+    password = os.getenv("EMAIL_PASS")
     msg = MIMEMultipart()
-    msg['Subject'] = f"🚀 {len(vagas)} Novas Vagas (Busca Geral) - João Batista"
+    msg['Subject'] = f"🚀 {len(vagas)} Novas Vagas para João Batista"
     msg['From'] = user
     msg['To'] = user
-    
-    html = f"<h2>Foram analisadas as melhores vagas de hoje:</h2>"
+    html = "<h2>Vagas Selecionadas por IA</h2>"
     for v in vagas:
-        html += f"""
-        <div style='border-bottom: 1px solid #ddd; padding: 15px; margin-bottom: 10px; font-family: sans-serif;'>
-            <h3 style='color: #2c3e50; margin-bottom: 5px;'>{v['titulo']}</h3>
-            <p style='margin: 0;'><b>Empresa:</b> {v['empresa']} | <b>Nota IA:</b> <span style='color: green;'>{v['nota']}/10</span></p>
-            <p style='background: #f9f9f9; padding: 10px; border-left: 4px solid #3498db;'><i>{v['motivo']}</i></p>
-            <a href='{v['link']}' style='display: inline-block; padding: 10px 15px; background: #3498db; color: white; text-decoration: none; border-radius: 5px; margin-top: 10px;'>Ver Detalhes da Vaga</a>
-        </div>
-        """
+        html += f"<div style='border-bottom:1px solid #ccc;padding:10px;'><h3>{v['titulo']}</h3><p><b>Nota: {v['nota']}</b> | {v['empresa']}</p><p>{v['motivo']}</p><a href='{v['link']}'>Ver Vaga</a></div>"
     msg.attach(MIMEText(html, 'html'))
-    
-    try:
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-            server.login(user, password)
-            server.send_message(msg)
-        print(f"✅ E-mail com {len(vagas)} vagas enviado!")
-    except Exception as e:
-        print(f"❌ Erro ao enviar e-mail: {e}")
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+        server.login(user, password)
+        server.send_message(msg)
 
 # 2. EXECUÇÃO
-print("--- INICIANDO BUSCA EM MÚLTIPLOS SITES ---")
+print("--- INICIANDO BUSCA OTIMIZADA ---")
 historico = carregar_historico()
 vagas_para_enviar = []
 
 try:
     with open(ARQUIVO_CURRICULO, "r", encoding="utf-8") as f:
         perfil = f.read()
-    print("✅ Perfil profissional carregado.")
+    print("✅ Currículo carregado.")
 except:
-    perfil = "Técnico de Suporte em TI e desenvolvedor iniciante."
+    perfil = "Técnico de Suporte TI, graduado em Física, cursando ADS."
 
-# ... (mantenha o início igual)
-
-# Lista de sites que funcionam melhor no Brasil
-sites_alvo = ["indeed", "linkedin"] 
-print(f"🔍 Vasculhando: {', '.join(sites_alvo)}...")
-
+# BUSCA FOCO EM FLORIPA E REGIÃO
 try:
     jobs = scrape_jobs(
-        site_name=sites_alvo,
+        site_name=["indeed", "linkedin"],
         search_term="Suporte TI, Help Desk, Tecnico Informatica, Analista Suporte",
-        location="Florianopolis, SC",
-        results_wanted=40, # Aumentamos o volume
+        location="Florianopolis",
+        distance=50, # Pega São José, Palhoça, etc.
+        results_wanted=50,
         country_hint="brazil",
-        hours_old=168, # Janela de 7 dias para garantir resultados
-        enforce_comma_separation=True
+        hours_old=168 # Últimos 7 dias
     )
-    print(f"📊 Total bruto de vagas encontradas: {len(jobs)}")
+    print(f"✅ Vagas encontradas no total: {len(jobs)}")
 except Exception as e:
-    print(f"⚠️ Erro no Scraper: {e}")
+    print(f"❌ Erro no Scraper: {e}")
     jobs = pd.DataFrame()
 
-# ... (mantenha o resto do loop da IA igual)
+if not jobs.empty:
+    for _, row in jobs.iterrows():
+        link = row['job_url']
+        if link in historico: continue
+        
+        # Filtro inicial por palavras-chave no título para poupar API
+        titulo = row['title'].lower()
+        if not any(x in titulo for x in ['suporte', 'tecnico', 'help', 'analista', 'ti', 'informatica', 'python']):
+            continue
+
+        prompt = f"Avalie a vaga para este candidato: {perfil}. Vaga: {row['title']} - {row['description'][:800]}. Responda APENAS um JSON: {{"nota": 0 a 10, "motivo": "frase"}}"
+        try:
+            response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
+            res_text = response.text.strip().replace("```json", "").replace("```", "")
+            res_json = json.loads(res_text)
+            
+            # Nota 6 ou mais para garantir que chegue algo no início
+            if res_json.get("nota", 0) >= 6:
+                vagas_para_enviar.append({
+                    'titulo': row['title'], 'empresa': row['company'],
+                    'nota': res_json['nota'], 'motivo': res_json['motivo'], 'link': link
+                })
+                salvar_no_historico(link)
+                print(f"🎯 Aprovada: {row['title']} (Nota {res_json['nota']})")
+            time.sleep(2)
+        except: continue
+
+enviar_email(vagas_para_enviar)
+print("--- FIM DO PROCESSO ---")

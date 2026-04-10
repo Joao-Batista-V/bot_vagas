@@ -89,8 +89,13 @@ for local in locais:
                 link = row['job_url']
                 if link in historico: continue
                 
-                # IA analisa a vaga
-                prompt = f"Avalie a vaga para este candidato: {perfil}. Vaga: {row['title']} - {row['description'][:800]}. Responda APENAS um JSON: {{"nota": 0 a 10, "motivo": "frase"}}"
+                # IA analisa a vaga (Versão Corrigida)
+                prompt = f"""
+                Avalie a vaga para este candidato: {perfil}. 
+                Vaga: {row['title']} - {row['description'][:800]}. 
+                Responda APENAS um JSON no formato: 
+                {{"nota": 0, "motivo": "frase"}}
+                """
                 try:
                     response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
                     res_json = json.loads(response.text.strip().replace("```json", "").replace("```", ""))
